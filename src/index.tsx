@@ -202,7 +202,7 @@ function describe(live: Live | null, enabled: boolean, launchOk: boolean): { ton
     return {
       tone: "grey",
       title: "Off",
-      detail: "Real frames only. Turn it back on to compare – it switches instantly while the game runs.",
+      detail: "Real frames only, no frame limit. Turn it back on to compare – it switches instantly while the game runs.",
     };
   const fps =
     live.real_fps !== undefined ? `${live.real_fps} real FPS → ~${live.output_fps} FPS` : undefined;
@@ -307,7 +307,7 @@ function GameLine({ app, live, enabled, launchOk }: { app: RunningApp; live: Liv
 
 function limitText(v: number): string {
   if (v <= 0) return "Off – the game's real (base) frames are not limited. Applies instantly.";
-  return `Limits the game's real (base) frames to ${v} FPS. Frame generation doubles them: ${v} → ${v * 2} FPS on screen. Applies instantly.`;
+  return `Limits the game's real (base) frames to ${v} FPS. Frame generation doubles them: ${v} → ${v * 2} FPS on screen. Applies instantly, only while Smooth Frames is on.`;
 }
 
 function LimitControl({ value, fallback, onChange }: { value: number; fallback: number; onChange: (v: number) => void }) {

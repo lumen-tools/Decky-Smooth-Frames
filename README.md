@@ -30,7 +30,8 @@ from the Quick Access Menu and shows whether it is really generating frames.
   paced halfway between the real ones. Should a future extension show up, the live status says so.
 - **Switches instantly**: once a game has been started with Smooth Frames on, the toggle and the
   frame rate limit apply immediately while it runs, so you can compare real frames against frame
-  generation (A/B) without restarting. Only the first activation per game and the frame generation
+  generation (A/B) without restarting. Switching Smooth Frames off also lifts its limit; to compare
+  at the same base frame rate, set Steam's frame limit to it for the A/B. Only the first activation per game and the frame generation
   options need a restart.
 - **afmf-linux's frame generation options, named after AFMF 2.1 in AMD Software** (collapsed
   under *Frame Generation Options*): Performance Mode (motion estimated at half or full
@@ -43,7 +44,8 @@ from the Quick Access Menu and shows whether it is really generating frames.
   (default 30 on the 60 Hz LCD, 45 on the 90 Hz OLED). Docked to a VRR monitor you can raise it or
   switch it off. The limiter lives inside the layer and delays the game's next frame after each
   present, like a driver limiter does. afmf-linux's minimum frame rate follows the limit (15 %
-  below it), so a game held at its limit keeps generating frames.
+  below it), so a game held at its limit keeps generating frames. The limit only applies while
+  Smooth Frames is on.
 - **Nothing to install separately**: the layer ships with the plugin and is registered under its
   own name (`VK_LAYER_DECKY_SMOOTH_FRAMES`, enabled by `SMOOTH_FRAMES_ENABLE=1`), so an upstream afmf-linux
   installed by other tools never loads alongside it.

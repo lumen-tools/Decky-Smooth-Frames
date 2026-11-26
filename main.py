@@ -315,7 +315,8 @@ class Store:
             _atomic_write(os.path.join(ENV_DIR, name), content.encode("utf-8"))
         os.makedirs(CONTROL_DIR, exist_ok=True)
         for appid, g in self.data["games"].items():
-            control = f"{1 if g['enabled'] else 0} {g['profile']['limit']}\n"
+            # the limit belongs to frame generation: switched off, the game runs untouched
+            control = f"1 {g['profile']['limit']}\n" if g["enabled"] else "0 0\n"
             path = os.path.join(CONTROL_DIR, appid)
             try:
                 with open(path, "r") as fh:
