@@ -455,6 +455,7 @@ function Content() {
   const [toggling, setToggling] = useState(false);
   const [live, setLive] = useState<Live | null>(null);
   const [games, setGames] = useState<GameEntry[]>([]);
+  const enabledCount = games.filter((g) => g.enabled).length;
   const [cleaning, setCleaning] = useState(false);
 
   const refreshStatus = useCallback(async () => setStatus(await getStatus()), []);
@@ -602,13 +603,13 @@ function Content() {
         )}
       </PanelSection>
 
-      {games.length > 0 && (
+      {enabledCount > 0 && (
         <PanelSection>
           <PanelSectionRow>
             <ButtonItem
               layout="below"
               disabled={cleaning}
-              description={`Smooth Frames is on in ${games.length} game${games.length === 1 ? "" : "s"}. This turns it off everywhere and cleans up the launch options – do this before uninstalling the plugin.`}
+              description={`Smooth Frames is on in ${enabledCount} game${enabledCount === 1 ? "" : "s"}. This turns it off everywhere and cleans up the launch options – do this before uninstalling the plugin.`}
               onClick={removeAll}
             >
               {cleaning ? "Removing…" : "Remove Smooth Frames from all games"}
