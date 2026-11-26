@@ -210,10 +210,19 @@ index 5a309ec..1b3ef43 100644
              sc->under_floor = true;
          else if (sc->under_floor && frame_ms < 0.9 * floor_ms) {
 diff --git a/src/swapchain_internal.h b/src/swapchain_internal.h
-index 9f76d80..ddfd08a 100644
+index 9f76d80..37f5668 100644
 --- a/src/swapchain_internal.h
 +++ b/src/swapchain_internal.h
-@@ -88,6 +88,11 @@ struct afmf_slot {
+@@ -64,6 +64,8 @@ struct afmf_present_job {
+     VkPresentModeKHR present_mode;
+     VkFence present_fence; /* VK_EXT_swapchain_maintenance1: signalled with the real frame */
+     bool real_unwaited;    /* the layer's submission failed twice: present the real frame without its semaphore */
++    bool have_times;       /* VK_GOOGLE_display_timing: the application's desired present time, real frame */
++    VkPresentTimeGOOGLE times;
+ #ifdef VK_EXT_present_timing
+     /* Newer headers only (distribution packages build against older ones): without the
+      * extension in the header, a timing request makes that present inline, like any unknown
+@@ -88,6 +90,11 @@ struct afmf_slot {
      bool pending;
  };
  
@@ -225,7 +234,7 @@ index 9f76d80..ddfd08a 100644
  struct afmf_swapchain {
      VkSwapchainKHR handle;
      VkFormat format;
-@@ -152,6 +157,11 @@ struct afmf_swapchain {
+@@ -152,6 +159,11 @@ struct afmf_swapchain {
      bool under_floor; /* the real frame rate is below AFMF_MIN_FPS: no companions until it clears it by a margin */
      uint64_t reduced_frames; /* presents that went out without a companion because of the step */
      double frame_ms_ema; /* smoothed time between the application's presents, for pacing */
@@ -237,3 +246,73 @@ index 9f76d80..ddfd08a 100644
  
      /* Presentation thread. Under Proton each vkQueuePresentKHR measured 170-400 us of host time
       * on the application's thread; both presents (and the spare refill) run here instead, and
+diff --git a/src/swapchain_present_chain.c b/src/swapchain_present_chain.c
+index 08a27f1..61203be 100644
+--- a/src/swapchain_present_chain.c
++++ b/src/swapchain_present_chain.c
+@@ -74,6 +74,30 @@ bool afmf_sc_job_from_chain(const struct afmf_swapchain *sc, const VkPresentInfo
+ #endif
+         case VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR:
+             break; /* a hint about what changed; the generated frame changes everything anyway */
++        /* Decky Smooth Frames: every other structure the Vulkan registry (1.4.341) lets extend
++         * VkPresentInfoKHR, so a conforming application never makes the layer present inline,
++         * without pacing. */
++        case VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE: {
++            /* The desired present time and id belong to the application's frame: real frame. */
++            const VkPresentTimesInfoGOOGLE *t = (const VkPresentTimesInfoGOOGLE *)s;
++            if (t->pTimes != NULL && t->swapchainCount >= 1) {
++                job->times = t->pTimes[0];
++                job->have_times = true;
++            }
++            break;
++        }
++        case VK_STRUCTURE_TYPE_FRAME_BOUNDARY_EXT:
++            break; /* marks a frame for capture and debug tools, nothing the presentation needs */
++        case VK_STRUCTURE_TYPE_DEVICE_GROUP_PRESENT_INFO_KHR:
++            break; /* device masks of a multi-GPU device group; one GPU presents here */
++        case VK_STRUCTURE_TYPE_DISPLAY_PRESENT_INFO_KHR:
++            break; /* rectangles for a swapchain on a display without a compositor */
++        case VK_STRUCTURE_TYPE_PRESENT_FRAME_TOKEN_GGP:
++            break; /* Stadia's frame token */
++        /* By value: these sit behind VK_ENABLE_BETA_EXTENSIONS or newer headers. */
++        case 1000613000: /* VK_STRUCTURE_TYPE_SET_PRESENT_CONFIG_NV (NVIDIA present metering) */
++        case 1000460023: /* VK_STRUCTURE_TYPE_FRAME_BOUNDARY_TENSORS_ARM, for capture tools */
++            break;
+         default: {
+             static bool reported;
+             if (!reported) {
+diff --git a/src/swapchain_presenter.c b/src/swapchain_presenter.c
+index eeeabce..eb15dfa 100644
+--- a/src/swapchain_presenter.c
++++ b/src/swapchain_presenter.c
+@@ -38,6 +38,11 @@ static VkResult present_one(struct afmf_device *dev, struct afmf_swapchain *sc,
+         .swapchainCount = 1,
+         .pFences = &job->present_fence,
+     };
++    VkPresentTimesInfoGOOGLE times = {
++        .sType = VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE,
++        .swapchainCount = 1,
++        .pTimes = &job->times,
++    };
+ #ifdef VK_EXT_present_timing
+     VkPresentTimingsInfoEXT timings = {
+         .sType = VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT,
+@@ -74,10 +79,17 @@ static VkResult present_one(struct afmf_device *dev, struct afmf_swapchain *sc,
+         *tail = &fence;
+         tail = &fence.pNext;
+     }
++    if (real && job->have_times) {
++        *tail = &times;
++        tail = &times.pNext;
++    }
+ #ifdef VK_EXT_present_timing
+-    if (real && job->have_timing)
++    if (real && job->have_timing) {
+         *tail = &timings;
++        tail = &timings.pNext;
++    }
+ #endif
++    (void)tail;
+ 
+     struct timespec t0, t1;
+     (void)clock_gettime(CLOCK_MONOTONIC, &t0);

@@ -435,6 +435,9 @@ READY_MARK = "[AFMF info] interpolation ready"
 # The layer then shows the previous frame again instead of an interpolated one: more frames,
 # no smoother motion. Must not be reported as working.
 REPEAT_MARK = "repeating frames"
+# The presentation thread cannot carry the game's present chain: frames go out inline, the
+# generated one right before the real one, so it never gets its half of the interval.
+UNPACED_MARK = "without pacing"
 PROBLEM_RE = re.compile(r"\[AFMF (error|warn)\] (.*)")
 TAIL_BYTES = 256 * 1024
 LAYER_MIN_FPS = 30  # afmf-linux default for AFMF_MIN_FPS; the layer keeps it 15 % under the base limit
@@ -530,7 +533,7 @@ class LiveTracker:
         if not c or c["start"] != sess["start"]:
             c = {"start": sess["start"], "layer": False, "swapchain": None, "passthrough": None,
                  "last_stats": None, "prev_stats": None, "stats_seen": 0.0, "problem": None,
-                 "pending_repeat": False}
+                 "pending_repeat": False, "unpaced": False}
             self.cache[appid] = c
 
         text = _tail(os.path.join(STATUS_DIR, appid + ".log"))
@@ -568,6 +571,8 @@ class LiveTracker:
                 c["problem"] = m.group(2)[:200]
                 if REPEAT_MARK in line:
                     c["pending_repeat"] = True
+                if UNPACED_MARK in line:
+                    c["unpaced"] = True
 
         if stats:
             last = stats[-1]
@@ -611,6 +616,8 @@ class LiveTracker:
             return {**out, "state": "stale"}
         if c["swapchain"] and c["swapchain"].get("repeat") and c["swapchain"]["handle"] == last["handle"]:
             return {**out, "state": "repeating"}
+        if c["unpaced"] and ratio >= 0.05:
+            return {**out, "state": "unpaced"}
         if ratio >= 0.9:
             return {**out, "state": "active"}
         if ratio >= 0.05:
@@ -649,12 +656,11 @@ class Plugin:
         pass
 
     async def _uninstall(self):
-        # Keep the wrapper and env files: Steam may still have launch options pointing at them,
-        # and a missing wrapper would stop those games from starting. They run without the layer.
+        # Decky also calls this when a plugin is updated (the old version is uninstalled before
+        # the new one starts), so the settings must stay as they are. Only the layer goes: the
+        # new version installs it again on start. Without it, games that still have the launch
+        # option start normally, since the wrapper and its env files stay in place.
         try:
-            for appid in list(self.store.data["games"]):
-                self.store.data["games"][appid]["enabled"] = False
-            self.store.save()
             remove_layer()
         except Exception as err:  # noqa: BLE001
             decky.logger.error(f"uninstall cleanup failed: {err}")
