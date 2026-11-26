@@ -16,7 +16,7 @@ import { MdSlowMotionVideo } from "react-icons/md";
 // backend
 // ---------------------------------------------------------------------------------------------
 
-// The three AFMF 2.1 options of AMD Software: Adrenalin Edition
+// afmf-linux's three options, named after AFMF 2.1 in AMD Software
 interface Profile {
   search_mode: "auto" | "standard" | "high";
   performance_mode: "auto" | "quality" | "performance";
@@ -86,6 +86,10 @@ const setGameProfile = callable<[string, Profile], GameState>("set_game_profile"
 const resetGameProfile = callable<[string], GameState>("reset_game_profile");
 const forgetGame = callable<[string], boolean>("forget_game");
 const listGames = callable<[], GameEntry[]>("list_games");
+const getLaunchMigration = callable<[], { needed: boolean; old_wrapper_name: string; appids: string[] }>(
+  "get_launch_migration",
+);
+const setLaunchMigrationDone = callable<[], boolean>("set_launch_migration_done");
 const getLiveStatus = callable<[string], Live>("get_live_status");
 
 // ---------------------------------------------------------------------------------------------
@@ -193,7 +197,7 @@ const TONE_COLOR: Record<Tone, string> = {
 function describe(live: Live | null, enabled: boolean, launchOk: boolean): { tone: Tone; title: string; detail?: string } {
   if (!live) return { tone: "grey", title: "Loading status…" };
   if (!enabled && live.state !== "no_session" && live.state !== "off")
-    return { tone: "yellow", title: "Turned off – restart required", detail: "AFMF stays active until the game is restarted." };
+    return { tone: "yellow", title: "Turned off – restart required", detail: "Frame generation stays active until the game is restarted." };
   const fps =
     live.real_fps !== undefined ? `${live.real_fps} real FPS → ~${live.output_fps} FPS` : undefined;
   switch (live.state) {
@@ -201,11 +205,11 @@ function describe(live: Live | null, enabled: boolean, launchOk: boolean): { ton
       if (enabled && !launchOk)
         return { tone: "red", title: "Launch option missing", detail: "Turn the toggle off and on again." };
       return enabled
-        ? { tone: "yellow", title: "Enabled – restart required", detail: "AFMF loads when the game starts. Quit and relaunch it." }
+        ? { tone: "yellow", title: "Enabled – restart required", detail: "Frame generation loads when the game starts. Quit and relaunch it." }
         : { tone: "grey", title: "Off" };
     case "off":
       return enabled
-        ? { tone: "yellow", title: "Enabled – restart required", detail: "This session was started without AFMF." }
+        ? { tone: "yellow", title: "Enabled – restart required", detail: "This session was started without frame generation." }
         : { tone: "grey", title: "Off", detail: "Will not load on the next launch." };
     case "no_live":
       return { tone: "blue", title: "Loaded", detail: "No statistics from the layer for this session." };
@@ -285,12 +289,12 @@ function GameLine({ app, live, enabled, launchOk }: { app: RunningApp; live: Liv
 }
 
 // ---------------------------------------------------------------------------------------------
-// settings (same options as AFMF 2.1 in AMD Software)
+// settings (afmf-linux's options, named after AFMF 2.1)
 // ---------------------------------------------------------------------------------------------
 
 function limitText(v: number): string {
   if (v <= 0) return "Off – the game's real (base) frames are not limited.";
-  return `Limits the game's real (base) frames to ${v} FPS. AFMF doubles them: ${v} → ${v * 2} FPS on screen.`;
+  return `Limits the game's real (base) frames to ${v} FPS. Frame generation doubles them: ${v} → ${v * 2} FPS on screen.`;
 }
 
 function LimitControl({ value, fallback, onChange }: { value: number; fallback: number; onChange: (v: number) => void }) {
@@ -360,14 +364,14 @@ function GameSettings({
     <>
       <LimitControl value={p.limit} fallback={fallback} onChange={(v) => set("limit", v)} />
       <PanelSectionRow>
-        <ToggleField label="AFMF Options" checked={showOptions} onChange={setShowOptions} />
+        <ToggleField label="Frame Generation Options" checked={showOptions} onChange={setShowOptions} />
       </PanelSectionRow>
       {showOptions && (
         <>
           <PanelSectionRow>
             <DropdownItem
               label="Search Mode"
-              description="How far frame generation searches for motion. Auto picks High from 1440p up."
+              description="How far motion is searched. High helps with fast camera pans but costs more. Auto: Standard with Performance Mode, High with Quality."
               rgOptions={[
                 { data: "auto", label: "Auto" },
                 { data: "standard", label: "Standard" },
@@ -380,7 +384,7 @@ function GameSettings({
           <PanelSectionRow>
             <DropdownItem
               label="Performance Mode"
-              description="Performance lowers the overhead. Auto uses Performance on the Steam Deck."
+              description="Motion is estimated at half (Performance) or full (Quality) resolution. Auto uses Performance on the Steam Deck."
               rgOptions={[
                 { data: "auto", label: "Auto" },
                 { data: "quality", label: "Quality" },
@@ -393,7 +397,7 @@ function GameSettings({
           <PanelSectionRow>
             <DropdownItem
               label="Fast Motion Response"
-              description="Repeat Frame keeps image quality, Blended Frame keeps motion smoother."
+              description="Where motion is uncertain: Repeat Frame shows the previous frame there, Blended Frame mixes both frames."
               rgOptions={[
                 { data: "repeat", label: "Repeat Frame" },
                 { data: "blend", label: "Blended Frame" },
@@ -508,10 +512,10 @@ function Content() {
       const ok = await applyLaunchOptions(app.appid, status.wrapper, on);
       setGame(await setGameEnabled(app.appid, app.name, on));
       setLaunchOk(on ? ok : true);
-      if (on && !ok) toaster.toast({ title: "Decky-AFMF", body: "Could not set the launch option." });
+      if (on && !ok) toaster.toast({ title: "Smooth Frames", body: "Could not set the launch option." });
       refreshGames();
     } catch (e) {
-      toaster.toast({ title: "Decky-AFMF", body: String(e) });
+      toaster.toast({ title: "Smooth Frames", body: String(e) });
     } finally {
       setToggling(false);
     }
@@ -531,12 +535,12 @@ function Content() {
     setCleaning(false);
     if (app) setGame(await getGame(app.appid));
     refreshGames();
-    toaster.toast({ title: "Decky-AFMF", body: "AFMF removed from all games." });
+    toaster.toast({ title: "Smooth Frames", body: "Smooth Frames removed from all games." });
   };
 
   const doRepair = async () => {
     const r = await repairLayer();
-    toaster.toast({ title: "Decky-AFMF", body: r.ok ? "Frame generation layer reinstalled." : `Failed: ${r.error}` });
+    toaster.toast({ title: "Smooth Frames", body: r.ok ? "Frame generation layer reinstalled." : `Failed: ${r.error}` });
     await refreshStatus();
   };
 
@@ -560,12 +564,12 @@ function Content() {
         )}
         <PanelSectionRow>
           <ToggleField
-            label="AFMF"
+            label="Smooth Frames"
             description={
               app ? (
                 <GameLine app={app} live={layerReady ? live : null} enabled={enabled} launchOk={launchOk} />
               ) : (
-                "Start a game to turn AFMF on for it."
+                "Start a game to turn Smooth Frames on for it."
               )
             }
             checked={enabled}
@@ -589,10 +593,10 @@ function Content() {
             <ButtonItem
               layout="below"
               disabled={cleaning}
-              description={`AFMF is on in ${games.length} game${games.length === 1 ? "" : "s"}. This turns it off everywhere and cleans up the launch options – do this before uninstalling the plugin.`}
+              description={`Smooth Frames is on in ${games.length} game${games.length === 1 ? "" : "s"}. This turns it off everywhere and cleans up the launch options – do this before uninstalling the plugin.`}
               onClick={removeAll}
             >
-              {cleaning ? "Removing…" : "Remove AFMF from all games"}
+              {cleaning ? "Removing…" : "Remove Smooth Frames from all games"}
             </ButtonItem>
           </PanelSectionRow>
         </PanelSection>
@@ -601,10 +605,37 @@ function Content() {
   );
 }
 
-export default definePlugin(() => ({
-  name: "Decky-AFMF",
-  titleView: <div className={staticClasses.Title}>Decky-AFMF</div>,
+// Games enabled under the plugin's earlier name (Decky-AFMF) call its wrapper: point them at ours.
+async function migrateLaunchOptions() {
+  try {
+    const m = await getLaunchMigration();
+    if (!m.needed) return;
+    const status = await getStatus();
+    const old = new RegExp(`\\S*/${escapeRe(m.old_wrapper_name)}\\s+\\d+(?=\\s+%command%)`, "g");
+    for (const appid of m.appids) {
+      try {
+        const shortcut = isShortcut(appid);
+        const opts = await readLaunchOptions(appid, shortcut);
+        if (!opts.includes(m.old_wrapper_name)) continue;
+        const cleaned = opts.replace(old, " ").replace(/\s{2,}/g, " ").trim();
+        writeLaunchOptions(appid, shortcut, addWrapper(cleaned, status.wrapper, appid));
+      } catch {
+        /* app no longer installed */
+      }
+    }
+    await setLaunchMigrationDone();
+  } catch (e) {
+    console.error("Smooth Frames: launch option migration failed", e);
+  }
+}
+
+export default definePlugin(() => {
+  migrateLaunchOptions();
+  return {
+  name: "Decky Smooth Frames",
+  titleView: <div className={staticClasses.Title}>Smooth Frames</div>,
   content: <Content />,
   icon: <MdSlowMotionVideo />,
   onDismount() {},
-}));
+  };
+});
