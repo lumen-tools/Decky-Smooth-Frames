@@ -60,6 +60,7 @@ type LiveState =
   | "stale"
   | "repeating"
   | "live_off"
+  | "unpaced"
   | "error";
 
 interface Live {
@@ -252,6 +253,13 @@ function describe(live: Live | null, enabled: boolean, launchOk: boolean): { ton
       };
     case "stale":
       return { tone: "grey", title: "No new frames", detail: "Game paused, in a menu or in the background." };
+    case "unpaced":
+      return {
+        tone: "red",
+        title: "Generating frames, but not paced",
+        detail:
+          "Generated frames reach the screen together with the real ones, so motion is not smoother – only latency rises. Please report this game with its log.",
+      };
     case "repeating":
       return {
         tone: "red",

@@ -107,7 +107,8 @@ stays in place and simply starts games without frame generation.
 
 ## Building
 
-Needs git, CMake ≥ 3.28, Ninja, GCC, glslang, Vulkan headers ≥ 1.3.250, Node.js and pnpm.
+Needs git, CMake ≥ 3.28, Ninja, GCC, glslang, binutils, Node.js and pnpm. The build fetches the
+Vulkan headers it needs (1.4.341).
 
 ```sh
 ./scripts/release.sh       # builds the layer and the frontend → release/Decky-Smooth-Frames.zip
