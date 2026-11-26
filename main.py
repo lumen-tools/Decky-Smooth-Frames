@@ -164,9 +164,10 @@ def profile_to_env(profile: dict, appid: str, enabled: bool = True) -> str:
         f"AFMF_SEARCH_MODE={p['search_mode']}",
         f"AFMF_PERFORMANCE_MODE={perf}",
         f"AFMF_FAST_MOTION_RESPONSE={p['fast_motion']}",
-        # info log + statistics every 300 presents: what the live status reads
+        # info log + statistics every STATS_INTERVAL presents: what the live status reads
         "AFMF_LOG=2",
         "AFMF_PROFILE=1",
+        f"AFMF_STATS_INTERVAL={STATS_INTERVAL}",
         "SMOOTH_FRAMES_STATUS=1",
         f"SMOOTH_FRAMES_LIMIT={p['limit']}",
         # re-read by the layer while the game runs: the toggle and the limit apply at once
@@ -440,6 +441,8 @@ REPEAT_MARK = "repeating frames"
 UNPACED_MARK = "without pacing"
 PROBLEM_RE = re.compile(r"\[AFMF (error|warn)\] (.*)")
 TAIL_BYTES = 256 * 1024
+# Presents per statistics line of the layer: every 2 s at 30 real fps, 1 s at 60.
+STATS_INTERVAL = 60
 LAYER_MIN_FPS = 30  # afmf-linux default for AFMF_MIN_FPS; the layer keeps it 15 % under the base limit
 
 
@@ -610,8 +613,8 @@ class LiveTracker:
             "governor_step": last["governor"],
             "no_image_pct": round(100 * d_noimg / d_pres) if d_pres else 0,
         })
-        # 300 presents per statistics line: at 30 fps that is 10 s
-        stale_after = max(8.0, 2.5 * 300.0 / max(real, 1))
+        # STATS_INTERVAL presents per statistics line: at 30 fps that is 2 s
+        stale_after = max(5.0, 2.5 * STATS_INTERVAL / max(real, 1))
         if now - c["stats_seen"] > stale_after:
             return {**out, "state": "stale"}
         if c["swapchain"] and c["swapchain"].get("repeat") and c["swapchain"]["handle"] == last["handle"]:
