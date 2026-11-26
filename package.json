@@ -1,6 +1,6 @@
 {
   "name": "decky-smooth-frames",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Driver-style frame generation for the Steam Deck (based on afmf-linux), with per-game toggle, live status and a base frame rate limiter",
   "type": "module",
   "scripts": {
