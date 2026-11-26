@@ -3,9 +3,10 @@
 ## afmf-linux (bundled, modified)
 
 `bin/libafmf-linux.so` is built from afmf-linux 1.3.1
-(https://github.com/serialexperimentslainnnn/afmf-linux) with two additions in
-`patches/afmf-linux-1.3.1-smooth-frames.patch`: a base frame rate limiter and a control file that
-turns generation on and off and changes the limit while a game runs (`scripts/build-layer.sh`
+(https://github.com/serialexperimentslainnnn/afmf-linux) with three changes in
+`patches/afmf-linux-1.3.1-smooth-frames.patch`: a base frame rate limiter, a control file that
+turns generation on and off and changes the limit while a game runs, and handling of every
+structure that may extend a present, so frames stay paced in every game (`scripts/build-layer.sh`
 reproduces the build). The licence texts ship in `bin/` and are copied to the plugin's data
 folder (`licenses/`).
 

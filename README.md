@@ -25,6 +25,9 @@ from the Quick Access Menu and shows whether it is really generating frames.
 - **Live status**: reads the layer's own statistics and shows whether frames are really being
   generated (real FPS → output FPS) and plain-language reasons when not (frame rate too low,
   pass-through, layer not loaded, frames only repeated, …).
+- **Paced in every game**: the bundled layer carries or safely ignores every structure the
+  Vulkan specification (1.4.341) lets a game attach to a present, so generated frames are always
+  paced halfway between the real ones. Should a future extension show up, the live status says so.
 - **Switches instantly**: once a game has been started with Smooth Frames on, the toggle and the
   frame rate limit apply immediately while it runs, so you can compare real frames against frame
   generation (A/B) without restarting. Only the first activation per game and the frame generation
