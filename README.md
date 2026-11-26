@@ -86,12 +86,6 @@ either.
 
 Steam's frame limit applies after the generated frames are added, so set it to 60 and use the plugin's limit for the base frames. The performance overlay also counts after the generated frames (about 60 with a base limit of 30).
 
-## Upgrading from Decky-AFMF
-
-Up to version 1.0.0 the plugin was called Decky-AFMF. Install Decky Smooth Frames, open it once
-(it takes over your settings and points the launch options of your games at the new name), then
-uninstall Decky-AFMF in Decky.
-
 ## Uninstalling
 
 Press *Remove Smooth Frames from all games* first (that also cleans the launch options), then uninstall
