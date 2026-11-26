@@ -6,7 +6,8 @@ Installs the plugin's own build of the open-source afmf-linux Vulkan layer
 settings and writes the small wrapper script that Steam's launch options call. No root needed.
 
 The bundled build adds one thing to afmf-linux 1.3.1: AFMF_MAX_BASE_FPS, a limiter for the game's
-real frames (patches/afmf-max-base-fps.patch). It is registered under its own layer name and its
+real frames, plus a control file to switch generation and the limit while a game runs
+(patches/afmf-linux-1.3.1-smooth-frames.patch). It is registered under its own layer name and its
 own enable variable, so an upstream afmf-linux installed by other tools never loads alongside it.
 
 Layout:
@@ -57,6 +58,7 @@ OLD_SETTINGS_PATHS = [
 ]
 OLD_WRAPPER_NAME = "decky-afmf-run"
 LICENSE_DIR = os.path.join(RUNTIME_DIR, "licenses")
+CONTROL_DIR = os.path.join(HOME, ".local", "share", "decky-smooth-frames", "control")  # <appid>: "<on> <limit>"
 STATUS_DIR = os.path.join(LOG_DIR, "games")  # <appid>.session and <appid>.log per launch
 STATUS_LOG_MAX = 4 * 1024 * 1024
 
@@ -167,6 +169,8 @@ def profile_to_env(profile: dict, appid: str, enabled: bool = True) -> str:
         "AFMF_PROFILE=1",
         "SMOOTH_FRAMES_STATUS=1",
         f"SMOOTH_FRAMES_LIMIT={p['limit']}",
+        # re-read by the layer while the game runs: the toggle and the limit apply at once
+        f"AFMF_CONTROL_FILE={os.path.join(CONTROL_DIR, appid)}",
     ]
     return "\n".join(lines) + "\n"
 
@@ -210,16 +214,9 @@ on=0
 case "$limit" in ''|*[!0-9]*) limit=0 ;; esac
 [ "$on" = 1 ] || limit=0
 if [ "$on" = 1 ]; then
-  if [ "$limit" -gt 0 ]; then
-    export AFMF_MAX_BASE_FPS="$limit"
-    # afmf-linux pauses generation below 30 real fps. A game held at a 30 fps limit sits right on
-    # that floor (33.35 ms vs 33.33 ms) and would switch generation off: keep the floor 15 % under
-    # the limit.
-    floor=$((limit * 85 / 100))
-    [ "$floor" -lt 30 ] && export AFMF_MIN_FPS="$floor"
-  fi
+  # the layer keeps its minimum-fps floor 15 % under this limit, also when it changes live
+  [ "$limit" -gt 0 ] && export AFMF_MAX_BASE_FPS="$limit"
 fi
-minfps="${AFMF_MIN_FPS:-30}"
 
 # Gamescope (Steam Deck Game Mode) keeps more images in flight: give the layer enough spares.
 gamescope=0
@@ -240,7 +237,6 @@ if mkdir -p "$STATUS_DIR" 2>/dev/null; then
     echo "status=$status"
     echo "gamescope=$gamescope"
     echo "limit=$limit"
-    echo "minfps=$minfps"
   } > "$STATUS_DIR/$appid.session" 2>/dev/null
   if [ "$on" = 1 ] && [ "$status" = 1 ]; then
     # The layer logs to stderr; a plain file (no pipe) cannot stall or kill the game.
@@ -316,6 +312,17 @@ class Store:
             wanted[f"{appid}.env"] = profile_to_env(g["profile"], appid, g["enabled"])
         for name, content in wanted.items():
             _atomic_write(os.path.join(ENV_DIR, name), content.encode("utf-8"))
+        os.makedirs(CONTROL_DIR, exist_ok=True)
+        for appid, g in self.data["games"].items():
+            control = f"{1 if g['enabled'] else 0} {g['profile']['limit']}\n"
+            path = os.path.join(CONTROL_DIR, appid)
+            try:
+                with open(path, "r") as fh:
+                    if fh.read() == control:
+                        continue
+            except OSError:
+                pass
+            _atomic_write(path, control.encode())
         # Games removed from the plugin: keep a file that turns the layer off in case Steam still
         # has the old launch option somewhere.
         for name in os.listdir(ENV_DIR):
@@ -430,7 +437,21 @@ READY_MARK = "[AFMF info] interpolation ready"
 REPEAT_MARK = "repeating frames"
 PROBLEM_RE = re.compile(r"\[AFMF (error|warn)\] (.*)")
 TAIL_BYTES = 256 * 1024
-LAYER_MIN_FPS = 30  # afmf-linux default for AFMF_MIN_FPS; the wrapper lowers it under a base limit
+LAYER_MIN_FPS = 30  # afmf-linux default for AFMF_MIN_FPS; the layer keeps it 15 % under the base limit
+
+
+def read_control(appid: str):
+    """(on, limit) as the layer reads it now, or None."""
+    try:
+        with open(os.path.join(CONTROL_DIR, appid), "r") as fh:
+            parts = fh.read().split()
+        return parts[0] == "1", int(parts[1])
+    except (OSError, IndexError, ValueError):
+        return None
+
+
+def floor_for(limit: int) -> int:
+    return limit * 85 // 100 if limit > 0 and LAYER_MIN_FPS * 100 > limit * 85 else LAYER_MIN_FPS
 
 
 def _read_session(appid: str):
@@ -451,7 +472,6 @@ def _read_session(appid: str):
         "on": data.get("on") == "1",
         "status": data.get("status") == "1",
         "limit": int(data["limit"]) if data.get("limit", "").isdigit() else 0,
-        "min_fps": int(data["minfps"]) if data.get("minfps", "").isdigit() else LAYER_MIN_FPS,
     }
 
 
@@ -494,10 +514,15 @@ class LiveTracker:
         if not sess or not _pid_is_session(sess["pid"], appid):
             return {"state": "no_session"}
         age = max(0, int(now - sess["start"]))
-        base = {"age": age, "limit": sess["limit"], "start": sess["start"]}
-        min_fps = sess["min_fps"]
+        ctrl = read_control(appid)
+        limit = ctrl[1] if ctrl else sess["limit"]
+        base = {"age": age, "limit": limit, "start": sess["start"]}
+        min_fps = floor_for(limit)
         if not sess["on"]:
             return {**base, "state": "off"}
+        if ctrl and not ctrl[0]:
+            # layer loaded, generation switched off from the plugin while the game runs
+            return {**base, "state": "live_off"}
         if not sess["status"]:
             return {**base, "state": "no_live"}
 
@@ -683,7 +708,6 @@ class Plugin:
         )
         g["name"] = str(name or g["name"])[:200]
         g["enabled"] = bool(enabled)
-        g["changed"] = time.time()
         await self._run(self.store.save)
         return self._game_view(appid)
 
@@ -694,8 +718,10 @@ class Plugin:
             raise ValueError("game is not enabled")
         new = sanitize_profile(profile)
         if new != g["profile"]:
+            # the limit applies live through the control file; the other options at the next start
+            if any(new[k] != g["profile"][k] for k in CHOICES):
+                g["changed"] = time.time()
             g["profile"] = new
-            g["changed"] = time.time()
             await self._run(self.store.save)
         return self._game_view(appid)
 

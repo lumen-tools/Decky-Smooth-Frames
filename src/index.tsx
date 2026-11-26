@@ -59,6 +59,7 @@ type LiveState =
   | "idle"
   | "stale"
   | "repeating"
+  | "live_off"
   | "error";
 
 interface Live {
@@ -196,8 +197,12 @@ const TONE_COLOR: Record<Tone, string> = {
 
 function describe(live: Live | null, enabled: boolean, launchOk: boolean): { tone: Tone; title: string; detail?: string } {
   if (!live) return { tone: "grey", title: "Loading status…" };
-  if (!enabled && live.state !== "no_session" && live.state !== "off")
-    return { tone: "yellow", title: "Turned off – restart required", detail: "Frame generation stays active until the game is restarted." };
+  if (live.state === "live_off" || (!enabled && live.state !== "no_session" && live.state !== "off"))
+    return {
+      tone: "grey",
+      title: "Off",
+      detail: "Real frames only. Turn it back on to compare – it switches instantly while the game runs.",
+    };
   const fps =
     live.real_fps !== undefined ? `${live.real_fps} real FPS → ~${live.output_fps} FPS` : undefined;
   switch (live.state) {
@@ -293,8 +298,8 @@ function GameLine({ app, live, enabled, launchOk }: { app: RunningApp; live: Liv
 // ---------------------------------------------------------------------------------------------
 
 function limitText(v: number): string {
-  if (v <= 0) return "Off – the game's real (base) frames are not limited.";
-  return `Limits the game's real (base) frames to ${v} FPS. Frame generation doubles them: ${v} → ${v * 2} FPS on screen.`;
+  if (v <= 0) return "Off – the game's real (base) frames are not limited. Applies instantly.";
+  return `Limits the game's real (base) frames to ${v} FPS. Frame generation doubles them: ${v} → ${v * 2} FPS on screen. Applies instantly.`;
 }
 
 function LimitControl({ value, fallback, onChange }: { value: number; fallback: number; onChange: (v: number) => void }) {
@@ -511,6 +516,8 @@ function Content() {
     try {
       const ok = await applyLaunchOptions(app.appid, status.wrapper, on);
       setGame(await setGameEnabled(app.appid, app.name, on));
+      // the layer re-reads its control file within 250 ms
+      setTimeout(async () => setLive(await getLiveStatus(app.appid)), 400);
       setLaunchOk(on ? ok : true);
       if (on && !ok) toaster.toast({ title: "Smooth Frames", body: "Could not set the launch option." });
       refreshGames();

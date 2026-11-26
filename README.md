@@ -4,9 +4,9 @@ Driver-style frame generation for the Steam Deck, in the spirit of AMD Fluid Mot
 NVIDIA Smooth Motion: one interpolated frame between every two real frames, paced in the middle.
 The interpolation itself is done by the open-source
 [afmf-linux](https://github.com/serialexperimentslainnnn/afmf-linux) Vulkan layer. The plugin ships
-its own build of it with one addition, a **base frame rate limiter** (the counterpart of Radeon
-Chill next to AFMF on Windows), switches it on per game from the Quick Access Menu and shows
-whether it is really generating frames.
+its own build of it with two additions, a **base frame rate limiter** (the counterpart of Radeon
+Chill next to AFMF on Windows) and **instant switching** while a game runs, turns it on per game
+from the Quick Access Menu and shows whether it is really generating frames.
 
 > **Not affiliated with or endorsed by AMD, NVIDIA or Valve.** It is not AMD's AFMF: afmf-linux is an
 > independent implementation of the same idea. "AMD", "Fluid Motion Frames", "Steam" and
@@ -24,8 +24,11 @@ whether it is really generating frames.
   (`<wrapper> <appid> %command%`) and keeps any options you already had.
 - **Live status**: reads the layer's own statistics and shows whether frames are really being
   generated (real FPS → output FPS) and plain-language reasons when not (frame rate too low,
-  pass-through, layer not loaded, frames only repeated, …), plus a hint when a change needs a
-  game restart.
+  pass-through, layer not loaded, frames only repeated, …).
+- **Switches instantly**: once a game has been started with Smooth Frames on, the toggle and the
+  frame rate limit apply immediately while it runs, so you can compare real frames against frame
+  generation (A/B) without restarting. Only the first activation per game and the frame generation
+  options need a restart.
 - **afmf-linux's frame generation options, named after AFMF 2.1 in AMD Software** (collapsed
   under *Frame Generation Options*): Performance Mode (motion estimated at half or full
   resolution), Search Mode (how far motion is searched) and Fast Motion Response (repeat or blend
@@ -36,7 +39,8 @@ whether it is really generating frames.
   Windows: on the Steam Deck's screen (no VRR) half the refresh rate lets frame generation fill every refresh
   (default 30 on the 60 Hz LCD, 45 on the 90 Hz OLED). Docked to a VRR monitor you can raise it or
   switch it off. The limiter lives inside the layer and delays the game's next frame after each
-  present, like a driver limiter does.
+  present, like a driver limiter does. afmf-linux's minimum frame rate follows the limit (15 %
+  below it), so a game held at its limit keeps generating frames.
 - **Nothing to install separately**: the layer ships with the plugin and is registered under its
   own name (`VK_LAYER_DECKY_SMOOTH_FRAMES`, enabled by `SMOOTH_FRAMES_ENABLE=1`), so an upstream afmf-linux
   installed by other tools never loads alongside it.
@@ -49,7 +53,8 @@ whether it is really generating frames.
 3. Decky settings → *Developer mode* on → *Developer* → *Install plugin from ZIP* → pick
    `Decky-Smooth-Frames.zip`.
 4. Start a game, open the Quick Access Menu, turn on *Smooth Frames*, then **restart the game** once (the
-   layer is loaded when the game starts). From then on it is on for that game.
+   layer is loaded when the game starts). From then on the toggle and the limit switch instantly
+   in that game.
 
 ## How it works
 
@@ -109,7 +114,7 @@ Needs git, CMake ≥ 3.28, Ninja, GCC, glslang, Vulkan headers ≥ 1.3.250, Node
 ```
 
 `scripts/build-layer.sh` alone builds `bin/libafmf-linux.so`: afmf-linux 1.3.1 with
-`patches/afmf-max-base-fps.patch` applied.
+`patches/afmf-linux-1.3.1-smooth-frames.patch` applied.
 
 ## License
 

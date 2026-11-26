@@ -16,6 +16,5 @@ cp dist/index.js "$stage/Decky-Smooth-Frames/dist/"
 cp -r bin main.py plugin.json package.json LICENSE README.md THIRD_PARTY.md "$stage/Decky-Smooth-Frames/"
 rm -f "$out/Decky-Smooth-Frames.zip"
 (cd "$stage" && zip -qr "$out/Decky-Smooth-Frames.zip" Decky-Smooth-Frames)
-(cd "$out" && sha256sum Decky-Smooth-Frames.zip > Decky-Smooth-Frames.zip.sha256)
 rm -rf "$stage"
 echo "release: $out/Decky-Smooth-Frames.zip"
