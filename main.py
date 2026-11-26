@@ -649,12 +649,11 @@ class Plugin:
         pass
 
     async def _uninstall(self):
-        # Keep the wrapper and env files: Steam may still have launch options pointing at them,
-        # and a missing wrapper would stop those games from starting. They run without the layer.
+        # Decky also calls this when a plugin is updated (the old version is uninstalled before
+        # the new one starts), so the settings must stay as they are. Only the layer goes: the
+        # new version installs it again on start. Without it, games that still have the launch
+        # option start normally, since the wrapper and its env files stay in place.
         try:
-            for appid in list(self.store.data["games"]):
-                self.store.data["games"][appid]["enabled"] = False
-            self.store.save()
             remove_layer()
         except Exception as err:  # noqa: BLE001
             decky.logger.error(f"uninstall cleanup failed: {err}")
