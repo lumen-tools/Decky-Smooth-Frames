@@ -1,8 +1,8 @@
 diff --git a/src/config.c b/src/config.c
-index 696f9fe..d60b7c8 100644
+index 696f9fe..415fee7 100644
 --- a/src/config.c
 +++ b/src/config.c
-@@ -102,6 +102,10 @@ static void init(void)
+@@ -102,6 +102,13 @@ static void init(void)
       * frame rate doubling is not worth its latency. */
      long governor = 1;
      long min_fps = 30;
@@ -10,22 +10,27 @@ index 696f9fe..d60b7c8 100644
 +     * AFMF. On a fixed-refresh display half the refresh rate fills every refresh with a real or a
 +     * generated frame. Off unless set; AFMF_CONTROL_FILE can change it while the game runs. */
 +    long max_base_fps = 0;
++    /* Decky Smooth Frames: presents per statistics line. The plugin's live status reads these
++     * lines; 300 is a line every 10 s at 30 fps. */
++    long stats_interval = 300;
      /* Sum of absolute 8-bit luma differences over a block's 64 pixels between the two frames at
       * rest; 128 is two levels per pixel on average, what temporal anti-aliasing leaves on a
       * still image. Under it the block is stored as static and its search is skipped. */
-@@ -146,6 +150,7 @@ static void init(void)
+@@ -146,6 +153,8 @@ static void init(void)
      ok = read_choice("AFMF_PRESENT_MODE", present_modes, 2, &present_mode) && ok;
      ok = read_bounded("AFMF_GOVERNOR", 0, 1, &governor) && ok;
      ok = read_bounded("AFMF_MIN_FPS", 0, 240, &min_fps) && ok;
 +    ok = read_bounded("AFMF_MAX_BASE_FPS", 0, 1000, &max_base_fps) && ok;
++    ok = read_bounded("AFMF_STATS_INTERVAL", 30, 3000, &stats_interval) && ok;
      ok = read_bounded("AFMF_STATIC_BLOCK_SAD", 0, 16320, &static_block_sad) && ok;
      ok = read_bounded("AFMF_DIRECT_OUTPUT", 0, 1, &direct_output) && ok;
      ok = read_bounded("AFMF_HUD_DETECT", 0, 1, &hud_detect) && ok;
-@@ -170,6 +175,10 @@ static void init(void)
+@@ -170,6 +179,11 @@ static void init(void)
      g_config.present_mode = (enum afmf_present_mode)present_mode;
      g_config.governor = governor != 0;
      g_config.min_fps = (uint32_t)min_fps;
 +    g_config.max_base_fps = (uint32_t)max_base_fps;
++    g_config.stats_interval = (uint32_t)stats_interval;
 +    /* Copied for the same reason as AFMF_DUMP_DIR. */
 +    const char *control_file = getenv("AFMF_CONTROL_FILE");
 +    g_config.control_file = control_file != NULL && *control_file != '\0' ? strdup(control_file) : NULL;
@@ -33,14 +38,15 @@ index 696f9fe..d60b7c8 100644
      g_config.direct_output = direct_output != 0;
      g_config.hud_detect = hud_detect != 0;
 diff --git a/src/config.h b/src/config.h
-index 0e6f30c..5aab6b2 100644
+index 0e6f30c..e0e02be 100644
 --- a/src/config.h
 +++ b/src/config.h
-@@ -46,6 +46,8 @@ struct afmf_config {
+@@ -46,6 +46,9 @@ struct afmf_config {
      bool direct_ingest;          /* AFMF_DIRECT_INGEST: sample the game's frame straight into the ring and luma (SAMPLED usage) */
      bool sad_int16;              /* AFMF_SAD_INT16=0: the block search's scalar SAD even where shaderInt16 is available */
      uint32_t min_fps;            /* AFMF_MIN_FPS: no companions below this real frame rate (0 = always) */
 +    uint32_t max_base_fps;       /* AFMF_MAX_BASE_FPS (Decky Smooth Frames): the game's real frames are capped at this rate (0 = off) */
++    uint32_t stats_interval;     /* AFMF_STATS_INTERVAL (Decky Smooth Frames): presents per statistics line, 30..3000 */
 +    const char *control_file;    /* AFMF_CONTROL_FILE (Decky Smooth Frames): "<generate 0|1> <max base fps>", re-read while running */
      bool invalid;                /* some variable was set but unparsable; caller reports it */
  };
@@ -117,7 +123,7 @@ index a387d01..72cd7bd 100644
 +    return res;
  }
 diff --git a/src/swapchain_cadence.c b/src/swapchain_cadence.c
-index 5a309ec..1b3ef43 100644
+index 5a309ec..1482c38 100644
 --- a/src/swapchain_cadence.c
 +++ b/src/swapchain_cadence.c
 @@ -3,6 +3,63 @@
@@ -184,6 +190,15 @@ index 5a309ec..1b3ef43 100644
  /* Returns this present's ordinal, which the work thread's governor paces on. */
  uint64_t afmf_sc_update_cadence(struct afmf_device *dev, struct afmf_swapchain *sc)
  {
+@@ -32,7 +89,7 @@ uint64_t afmf_sc_update_cadence(struct afmf_device *dev, struct afmf_swapchain *
+         sc->last_present = now;
+     }
+     sc->present_count++;
+-    if (sc->frame_time_samples == AFMF_STATS_INTERVAL) {
++    if (sc->frame_time_samples >= afmf_config_get()->stats_interval) {
+         double n = (double)sc->frame_time_samples;
+         double frame_ms = sc->frame_time_ms_accum / n;
+         /* Where the application's thread waits (the hook: with AFMF_PROFILE this is the number
 @@ -74,12 +131,22 @@ bool afmf_sc_governor_allows(struct afmf_swapchain *sc, double last_delay_ms, ui
  {
      const struct afmf_config *cfg = afmf_config_get();
