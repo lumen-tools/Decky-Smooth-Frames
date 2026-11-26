@@ -1,5 +1,5 @@
 {
-  "name": "Decky-AFMF",
+  "name": "Decky Smooth Frames",
   "author": "lumen-tools",
   "flags": [],
   "api_version": 1,
@@ -9,7 +9,7 @@
       "performance",
       "vulkan"
     ],
-    "description": "Frame generation for any Vulkan/Proton game via the open-source afmf-linux layer. Per-game toggle and live status. Not affiliated with AMD or Valve.",
+    "description": "Driver-style frame generation for the Steam Deck, based on the open-source afmf-linux layer: per-game toggle, live status and a base frame rate limiter. Not affiliated with AMD, NVIDIA or Valve.",
     "image": ""
   }
 }
