@@ -1,0 +1,15 @@
+{
+  "name": "Decky-AFMF",
+  "author": "lumen-tools",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": [
+      "frame-generation",
+      "performance",
+      "vulkan"
+    ],
+    "description": "Frame generation for any Vulkan/Proton game via the open-source afmf-linux layer. Per-game toggle and live status. Not affiliated with AMD or Valve.",
+    "image": ""
+  }
+}
