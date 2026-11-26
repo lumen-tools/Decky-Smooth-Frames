@@ -94,7 +94,7 @@ either.
 
 ### Steam's frame limit and the performance overlay
 
-Steam's frame limit applies after the generated frames are added, so set it to the refresh rate (60 on the LCD, 90 on the OLED) and use the plugin's limit for the base frames. The performance overlay also counts after the generated frames (about 60 with a base limit of 30 on the LCD, about 90 with 45 on the OLED).
+Leave Steam's frame limit at the refresh rate (60 on the LCD, 90 on the OLED) and set the base frames with the plugin's limit. If Steam's limit is lower than the plugin's, fewer frames reach the screen, but the game keeps running at the plugin's limit. The performance overlay counts after the generated frames (about 60 with a base limit of 30 on the LCD, about 90 with 45 on the OLED).
 
 ## Uninstalling
 
